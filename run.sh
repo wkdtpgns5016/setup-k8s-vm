@@ -33,7 +33,7 @@ done
 if [ "$NODE_ROLE" -eq 1 ]; then
   echo ""
   echo "=== Master 노드 초기화 및 Calico 배포를 즉시 진행합니다 ==="
-  "${SCRIPT_DIR}/setup-master.sh"
+  "${SCRIPT_DIR}/setup-k8s-master.sh"
 else
   echo ""
   echo "=================================================================="
