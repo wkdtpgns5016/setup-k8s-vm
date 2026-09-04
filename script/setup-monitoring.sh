@@ -3,7 +3,9 @@ set -e
 
 # 마스터 노드에서 실행 (kube-controller-manager / kube-scheduler bind-address 패치 때문)
 # kube-prometheus-stack (Prometheus + Grafana + Alertmanager + node-exporter + kube-state-metrics)
-# VM 랩 기준 경량 프로파일: retention 3d / scrape 60s / Alertmanager 비활성 / 리소스 상한 지정 / 스토리지 emptyDir
+# VM 랩 기준 경량 프로파일: retention 3d / scrape 60s / Alertmanager 비활성 / 스토리지 emptyDir
+# 메모리 limit 은 실사용 피크보다 넉넉하게 (Prometheus 1Gi / Grafana 768Mi).
+# 이 값에서도 OOM 이면 워커 RAM 증설 또는 retention 축소가 필요하다는 신호.
 
 # Kubernetes v1.34 지원 (kube-prometheus-stack 89.x)
 CHART_VERSION="89.2.0"
@@ -81,13 +83,13 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
   --set prometheus.prometheusSpec.scrapeInterval=60s \
   --set prometheus.prometheusSpec.evaluationInterval=60s \
   --set prometheus.prometheusSpec.resources.requests.cpu=100m \
-  --set prometheus.prometheusSpec.resources.requests.memory=300Mi \
-  --set prometheus.prometheusSpec.resources.limits.memory=900Mi \
+  --set prometheus.prometheusSpec.resources.requests.memory=350Mi \
+  --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
   --set prometheusOperator.resources.requests.memory=64Mi \
   --set prometheusOperator.resources.limits.memory=200Mi \
   --set grafana.persistence.enabled=false \
-  --set grafana.resources.requests.memory=128Mi \
-  --set grafana.resources.limits.memory=400Mi \
+  --set grafana.resources.requests.memory=192Mi \
+  --set grafana.resources.limits.memory=768Mi \
   --set grafana.ingress.enabled=true \
   --set grafana.ingress.ingressClassName=nginx \
   --set grafana.ingress.hosts[0]="${GRAFANA_HOST}" \
