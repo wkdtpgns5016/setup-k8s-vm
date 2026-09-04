@@ -34,7 +34,11 @@ VM 2대(Master 1 + Worker 1)를 준비한 뒤 각 노드에서 `run.sh` 를 실�
 | 네트워크 | NAT (`enp0s3`, DHCP) + Host-Only (`enp0s8`, `192.168.56.0/24` 고정 IP) |
 | 노드 IP | Master `192.168.56.10` / Worker `192.168.56.20` (기본값, `setup-network.sh` 에서 입력·변경 가능) |
 | CNI Pod CIDR | `10.244.0.0/16` (노드 대역과 분리) |
-| 권장 스펙 | Master 2 vCPU / 2GB, Worker 2 vCPU / 6GB (모니터링·ArgoCD·Ingress 가 워커에 집중) |
+| 권장 스펙 | Master **2 vCPU / 4GB**, Worker **4 vCPU / 8GB** |
+
+> 스펙 근거 (전체 스택 idle 실측, `kubectl top nodes`):
+> Master 2.4GB(64%) — apiserver/etcd 여유가 적어 2GB 는 부족. Worker 2.3GB(29%) — 앱 배포 여유 충분.
+> 앱(NestJS MSA 5개) 배포 시 워커에 파드가 몰리므로 부하 테스트를 하려면 Worker 12GB 권장.
 
 > 인터페이스 이름(`enp0s3` / `enp0s8`)은 스크립트에 하드코딩되어 있음 — VirtualBox 기본값 기준.
 > NAT 어댑터는 아웃바운드(패키지 다운로드), Host-Only 어댑터는 노드 간 통신 및 서비스 접근용.
@@ -51,9 +55,10 @@ VM 2대(Master 1 + Worker 1)를 준비한 뒤 각 노드에서 `run.sh` 를 실�
 ```
 run.sh                              # 진입점: 노드 역할 선택 → bootstrap → (마스터면) master
 script/
-  bootstrap/                        # 모든 노드 공통
-    setup-network.sh                #   Netplan 고정 IP (enp0s8)
-    setup-k8s-common.sh             #   swap off, containerd, kubeadm/kubelet/kubectl
+  bootstrap/                        # 노드 레벨 설정
+    setup-network.sh                #   Netplan 고정 IP (enp0s8)          [run.sh 자동]
+    setup-k8s-common.sh             #   swap off, containerd, kube*        [run.sh 자동]
+    setup-tailscale.sh              #   외부 기기 접근용 서브넷 라우터      [선택·수동]
   master/
     setup-k8s-master.sh             #   kubeadm init + Calico CNI + Helm
   addons/                           # 워커 조인 후 마스터에서
@@ -100,3 +105,23 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 # Grafana
 kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo
 ```
+
+## (선택) 외부 기기에서 접근
+
+Host-Only 대역(`192.168.56.0/24`)은 VM 을 띄운 호스트 PC 안에서만 보인다. 다른 기기(맥북 등)에서
+`kubectl` / 웹 UI 를 쓰려면 Tailscale 서브넷 라우터를 구성한다.
+
+```bash
+# 마스터 VM 에서 (클러스터 구축 완료 후)
+./script/bootstrap/setup-tailscale.sh
+#   → 출력 URL 로 로그인 → 관리 콘솔에서 192.168.56.0/24 route 'Approve'
+
+# 접근할 기기에서
+brew install --cask tailscale && tailscale up      # 마스터와 같은 계정
+sudo tailscale set --accept-routes
+scp <user>@192.168.56.10:~/.kube/config ~/.kube/config
+kubectl get nodes
+```
+
+Tailscale = WireGuard 기반 메시 VPN. 마스터가 `192.168.56.0/24` 로 가는 관문이 되고,
+다른 기기는 그 route 를 수락해 터널로 클러스터에 도달한다. nip.io 주소·kubeconfig 는 그대로 사용.
