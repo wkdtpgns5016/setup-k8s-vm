@@ -107,7 +107,7 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
 
 echo ""
 echo "=== 4. Grafana 대시보드 프로비저닝 ==="
-# script/dashboards/**/*.json 를 ConfigMap 으로 등록.
+# script/addons/dashboards/**/*.json 를 ConfigMap 으로 등록.
 #   label grafana_dashboard=1 -> Grafana 사이드카가 자동 로드 (기본 대시보드와 같은 위치)
 #   폴더 분리는 하지 않음: foldersFromFilesStructure + '/' 포함 폴더명이 kube-prometheus-stack
 #   기본 대시보드와 충돌해 중첩/빈 폴더가 생기므로. 대시보드는 이름으로 구분 (검색/즐겨찾기).

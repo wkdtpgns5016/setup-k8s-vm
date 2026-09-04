@@ -9,7 +9,7 @@ if [ ! -d "$SCRIPT_DIR" ]; then
   exit 1
 fi
 
-chmod +x "${SCRIPT_DIR}"/*.sh
+find "${SCRIPT_DIR}" -name '*.sh' -exec chmod +x {} +
 
 echo "=== 노드 역할 선택 ==="
 echo "1) Master"
@@ -24,21 +24,21 @@ while true; do
 done
 
 # 1. 네트워크 스크립트에 역할 번호($NODE_ROLE)를 인자로 전달하여 실행
-"${SCRIPT_DIR}/setup-network.sh" "$NODE_ROLE"
+"${SCRIPT_DIR}/bootstrap/setup-network.sh" "$NODE_ROLE"
 
 # 2. 공통 환경(k8s 패키지, 방화벽, containerd) 설정 실행
-"${SCRIPT_DIR}/setup-k8s-common.sh"
+"${SCRIPT_DIR}/bootstrap/setup-k8s-common.sh"
 
 # 3. 마스터 선택 시 즉시 클러스터 초기화까지 진행
 if [ "$NODE_ROLE" -eq 1 ]; then
   echo ""
   echo "=== Master 노드 초기화 및 Calico 배포를 즉시 진행합니다 ==="
-  "${SCRIPT_DIR}/setup-k8s-master.sh"
+  "${SCRIPT_DIR}/master/setup-k8s-master.sh"
   echo ""
   echo "=================================================================="
   echo " [다음 단계] 워커 노드 조인이 끝난 뒤 마스터에서 애드온 설치:"
-  echo "   ${SCRIPT_DIR}/setup-addons.sh"
-  echo "   (metrics-server + ingress-nginx + ArgoCD 일괄 설치)"
+  echo "   ${SCRIPT_DIR}/addons/install-addons.sh"
+  echo "   (metrics-server + ingress-nginx + ArgoCD + 모니터링 일괄 설치)"
   echo "=================================================================="
 else
   echo ""
