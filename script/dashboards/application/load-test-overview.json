@@ -596,7 +596,7 @@
     },
     {
       "type": "row",
-      "title": "부하 정도 (Namespace 합계)",
+      "title": "부하 정도 (Namespace)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -609,8 +609,8 @@
     },
     {
       "type": "timeseries",
-      "title": "CPU 사용량 vs requests vs limits",
-      "description": "단위: CPU 코어",
+      "title": "CPU 사용량 — 서비스별 (stacked)",
+      "description": "스택 높이 = 네임스페이스 합계 usage / 색 구간 = 서비스 기여도. 단위: CPU 코어",
       "id": 12,
       "datasource": {
         "type": "prometheus",
@@ -620,6 +620,63 @@
         "h": 8,
         "w": 12,
         "x": 0,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "last",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (workload) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", container!=\"\", container!=\"POD\"}[$__rate_interval]) * on(namespace,pod) group_left(workload) namespace_workload_pod:kube_pod_owner:relabel{namespace=\"$namespace\"})",
+          "legendFormat": "{{workload}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU 합계 — usage vs requests vs limits",
+      "description": "용량 대비 위치 확인용 (노드 여력 패널과 함께)",
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
         "y": 22
       },
       "fieldConfig": {
@@ -686,16 +743,16 @@
       "type": "timeseries",
       "title": "CPU 사용률 (requests 대비)",
       "description": "HPA 평균 CPU 목표치와 비교",
-      "id": 13,
+      "id": 14,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 12,
-        "x": 12,
-        "y": 22
+        "x": 0,
+        "y": 30
       },
       "fieldConfig": {
         "defaults": {
@@ -743,7 +800,7 @@
       "type": "timeseries",
       "title": "CPU throttling 비율",
       "description": "높으면 CPU limit 이 병목",
-      "id": 14,
+      "id": 15,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -751,7 +808,7 @@
       "gridPos": {
         "h": 6,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 30
       },
       "fieldConfig": {
@@ -798,30 +855,30 @@
     },
     {
       "type": "timeseries",
-      "title": "네트워크 수신 / 송신",
+      "title": "메모리 working set — 서비스별 (stacked)",
       "description": "",
-      "id": 15,
+      "id": 16,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 6,
+        "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 30
+        "x": 0,
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "Bps",
+          "unit": "bytes",
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 20,
             "showPoints": "never",
             "lineWidth": 1,
             "spanNulls": false,
             "stacking": {
-              "mode": "none"
+              "mode": "normal"
             }
           }
         },
@@ -847,26 +904,17 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"$namespace\"}[$__rate_interval]))",
-          "legendFormat": "receive",
+          "expr": "sum by (workload) (container_memory_working_set_bytes{namespace=\"$namespace\", container!=\"\", container!=\"POD\"} * on(namespace,pod) group_left(workload) namespace_workload_pod:kube_pod_owner:relabel{namespace=\"$namespace\"})",
+          "legendFormat": "{{workload}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"$namespace\"}[$__rate_interval]))",
-          "legendFormat": "transmit",
-          "refId": "B"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "메모리 사용량 vs requests vs limits",
+      "title": "메모리 합계 — working set vs requests vs limits",
       "description": "",
-      "id": 16,
+      "id": 17,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -874,7 +922,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 36
       },
       "fieldConfig": {
@@ -938,6 +986,129 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "네트워크 (수신+송신) — 서비스별 (stacked)",
+      "description": "",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "last",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (workload) ((rate(container_network_receive_bytes_total{namespace=\"$namespace\"}[$__rate_interval]) + rate(container_network_transmit_bytes_total{namespace=\"$namespace\"}[$__rate_interval])) * on(namespace,pod) group_left(workload) namespace_workload_pod:kube_pod_owner:relabel{namespace=\"$namespace\"})",
+          "legendFormat": "{{workload}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "네트워크 합계 — 수신 / 송신",
+      "description": "",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "last",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"$namespace\"}[$__rate_interval]))",
+          "legendFormat": "receive",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"$namespace\"}[$__rate_interval]))",
+          "legendFormat": "transmit",
+          "refId": "B"
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "노드 여력 (Cluster) — 스케일 천장",
       "collapsed": false,
@@ -945,16 +1116,16 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 51
       },
-      "id": 17,
+      "id": 20,
       "panels": []
     },
     {
       "type": "stat",
       "title": "스케줄 가능 잔여 CPU (코어)",
       "description": "0 에 가까우면 신규 파드가 Pending. HPA 로도 못 늘림",
-      "id": 18,
+      "id": 21,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -963,7 +1134,7 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 45
+        "y": 52
       },
       "fieldConfig": {
         "defaults": {
@@ -1021,7 +1192,7 @@
       "type": "stat",
       "title": "스케줄 가능 잔여 메모리",
       "description": "",
-      "id": 19,
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1030,7 +1201,7 @@
         "h": 5,
         "w": 6,
         "x": 6,
-        "y": 45
+        "y": 52
       },
       "fieldConfig": {
         "defaults": {
@@ -1087,7 +1258,7 @@
       "type": "timeseries",
       "title": "노드별 requests 커밋률 (allocatable 대비 CPU)",
       "description": "1 에 근접하면 그 노드엔 더 스케줄 불가",
-      "id": 20,
+      "id": 23,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1096,7 +1267,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 45
+        "y": 52
       },
       "fieldConfig": {
         "defaults": {
@@ -1144,7 +1315,7 @@
       "type": "timeseries",
       "title": "노드별 CPU 포화도",
       "description": "실제 CPU 사용률 (requests 아님). 1 에 근접 = 한계",
-      "id": 21,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1153,7 +1324,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 60
       },
       "fieldConfig": {
         "defaults": {
@@ -1201,7 +1372,7 @@
       "type": "timeseries",
       "title": "노드별 메모리 사용률",
       "description": "",
-      "id": 22,
+      "id": 25,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1210,7 +1381,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 60
       },
       "fieldConfig": {
         "defaults": {
