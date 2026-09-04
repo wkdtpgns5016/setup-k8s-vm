@@ -3,7 +3,7 @@ set -e
 
 IFACE="enp0s8"
 POD_CIDR="192.168.0.0/16"
-CALICO_VERSION="v3.28.0"
+CALICO_VERSION="v3.29.0"
 
 echo "=== 1. Host-Only IP 감지 ==="
 MASTER_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
@@ -19,7 +19,6 @@ if [ -f "/etc/kubernetes/admin.conf" ]; then
   echo ""
   echo "[PASS] 이미 Kubernetes 컨트롤 플레인이 구성되어 있습니다."
   
-  # 토큰만 재생성해서 출력
   JOIN_CMD=$(sudo kubeadm token create --print-join-command 2>/dev/null || true)
   if [ -n "$JOIN_CMD" ]; then
     echo "$JOIN_CMD" > "$HOME/join-command.txt"
@@ -44,7 +43,7 @@ cleanup_on_init_fail() {
 trap cleanup_on_init_fail ERR
 
 echo ""
-echo "=== 2. kubeadm 초기화 시작 ==="
+echo "=== 2. kubeadm 초기화 시작 (Kubernetes v1.31) ==="
 sudo kubeadm init \
   --apiserver-advertise-address="${MASTER_IP}" \
   --pod-network-cidr="${POD_CIDR}"
@@ -57,7 +56,14 @@ sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 
 echo ""
 echo "=== 4. Calico CNI (${CALICO_VERSION}) 배포 ==="
-kubectl apply -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
+# Calico 공식 매니페스트 다운로드
+curl -sSL "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml" -o /tmp/calico.yaml
+
+# VirtualBox Dual-NIC 환경 대응: Calico가 NAT가 아닌 enp0s8 인터페이스를 사용하도록 지정
+sed -i '/- name: CLUSTER_TYPE/i \            - name: IP_AUTODETECTION_METHOD\n              value: "interface=enp0s8"' /tmp/calico.yaml
+
+kubectl apply -f /tmp/calico.yaml
+rm -f /tmp/calico.yaml
 
 # 정상 완료되었으므로 트랩 해제
 trap - ERR

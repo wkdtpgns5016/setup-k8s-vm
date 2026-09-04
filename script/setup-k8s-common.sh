@@ -24,7 +24,8 @@ sudo sysctl --system > /dev/null
 
 echo "=== [3/5] 필수 패키지 및 containerd 설치 ==="
 sudo apt-get update -y
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg containerd
+# v1.31 필수 패키지 conntrack, socat 포함
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg containerd conntrack socat
 
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
@@ -32,7 +33,7 @@ sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/con
 sudo systemctl restart containerd
 sudo systemctl enable containerd
 
-echo "=== [4/5] 쿠버네티스 패키지 저장소 등록 및 설치 ==="
+echo "=== [4/5] 쿠버네티스 패키지 저장소 등록 및 설치 (v1.31) ==="
 K8S_VERSION="v1.31"
 
 sudo mkdir -p /etc/apt/keyrings
@@ -44,24 +45,21 @@ sudo apt-get update -y
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
-echo "=== [5/5] Host-Only (enp0s8 / en0s8) Kubelet Node IP 설정 ==="
-# en0s8 또는 enp0s8 인터페이스에서 IPv4 주소 직접 추출
-TARGET_IFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -E '^(en0s8|enp0s8)$' | head -n 1)
-
-if [ -n "$TARGET_IFACE" ]; then
-  CURRENT_NODE_IP=$(ip -4 addr show dev "$TARGET_IFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
-fi
+echo "=== [5/5] Host-Only (enp0s8) Kubelet Node IP 설정 ==="
+# enp0s8 인터페이스에서만 IPv4 주소 추출
+CURRENT_NODE_IP=$(ip -4 addr show dev enp0s8 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
 
 if [ -z "$CURRENT_NODE_IP" ]; then
-  echo "[경고] en0s8 / enp0s8 인터페이스의 IP를 찾을 수 없습니다. 수동 확인이 필요합니다."
-else
-  echo "탐지된 인터페이스: ${TARGET_IFACE} (IP: ${CURRENT_NODE_IP})"
-  echo "KUBELET_EXTRA_ARGS=\"--node-ip=${CURRENT_NODE_IP}\"" | sudo tee /etc/default/kubelet
-  sudo systemctl daemon-reload
-  sudo systemctl restart kubelet
-  echo "Kubelet --node-ip 설정 완료 (${CURRENT_NODE_IP})"
+  echo "[에러] enp0s8 인터페이스를 찾을 수 없거나 IP가 할당되지 않았습니다."
+  exit 1
 fi
 
+echo "탐지된 인터페이스: enp0s8 (IP: ${CURRENT_NODE_IP})"
+echo "KUBELET_EXTRA_ARGS=\"--node-ip=${CURRENT_NODE_IP}\"" | sudo tee /etc/default/kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+echo "Kubelet --node-ip 설정 완료 (${CURRENT_NODE_IP})"
+
 echo "=========================================================="
-echo ">>> 기본 환경 설정 완료!"
+echo ">>> 기본 환경 설정 완료! (Kubernetes v1.31)"
 echo "=========================================================="
