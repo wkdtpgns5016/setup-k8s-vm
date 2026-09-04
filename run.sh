@@ -34,6 +34,12 @@ if [ "$NODE_ROLE" -eq 1 ]; then
   echo ""
   echo "=== Master 노드 초기화 및 Calico 배포를 즉시 진행합니다 ==="
   "${SCRIPT_DIR}/setup-k8s-master.sh"
+  echo ""
+  echo "=================================================================="
+  echo " [다음 단계] 워커 노드 조인이 끝난 뒤 마스터에서 애드온 설치:"
+  echo "   ${SCRIPT_DIR}/setup-addons.sh"
+  echo "   (metrics-server + ingress-nginx + ArgoCD 일괄 설치)"
+  echo "=================================================================="
 else
   echo ""
   echo "=================================================================="
