@@ -77,8 +77,6 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
   --set kubeEtcd.enabled=false \
   --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
   --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
-  --set grafana.sidecar.dashboards.folderAnnotation=grafana_folder \
-  --set grafana.sidecar.dashboards.provider.foldersFromFilesStructure=true \
   --set prometheus.prometheusSpec.retention=3d \
   --set prometheus.prometheusSpec.scrapeInterval=60s \
   --set prometheus.prometheusSpec.evaluationInterval=60s \
@@ -88,8 +86,8 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
   --set prometheusOperator.resources.requests.memory=64Mi \
   --set prometheusOperator.resources.limits.memory=200Mi \
   --set grafana.persistence.enabled=false \
-  --set grafana.resources.requests.memory=64Mi \
-  --set grafana.resources.limits.memory=200Mi \
+  --set grafana.resources.requests.memory=128Mi \
+  --set grafana.resources.limits.memory=400Mi \
   --set grafana.ingress.enabled=true \
   --set grafana.ingress.ingressClassName=nginx \
   --set grafana.ingress.hosts[0]="${GRAFANA_HOST}" \
@@ -107,11 +105,12 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
 
 echo ""
 echo "=== 4. Grafana 대시보드 프로비저닝 ==="
-# script/dashboards/<subdir>/*.json 를 ConfigMap 으로 등록.
-#   label grafana_dashboard=1  -> Grafana 사이드카가 자동 로드
-#   annotation grafana_folder  -> Grafana 폴더로 분류
+# script/dashboards/**/*.json 를 ConfigMap 으로 등록.
+#   label grafana_dashboard=1 -> Grafana 사이드카가 자동 로드 (기본 대시보드와 같은 위치)
+#   폴더 분리는 하지 않음: foldersFromFilesStructure + '/' 포함 폴더명이 kube-prometheus-stack
+#   기본 대시보드와 충돌해 중첩/빈 폴더가 생기므로. 대시보드는 이름으로 구분 (검색/즐겨찾기).
 load_dashboards() {
-  local dir="$1" folder="$2" f base cm
+  local dir="$1" f base cm
   [ -d "$dir" ] || { echo "  [SKIP] ${dir} 없음"; return 0; }
   for f in "$dir"/*.json; do
     [ -e "$f" ] || continue
@@ -120,13 +119,12 @@ load_dashboards() {
     kubectl -n "$NAMESPACE" create configmap "$cm" \
       --from-file="${base}.json=${f}" --dry-run=client -o yaml \
       | kubectl apply -f - > /dev/null
-    kubectl -n "$NAMESPACE" label   configmap "$cm" grafana_dashboard=1 --overwrite > /dev/null
-    kubectl -n "$NAMESPACE" annotate configmap "$cm" "grafana_folder=${folder}" --overwrite > /dev/null
-    echo "  로드: ${folder} / ${base}"
+    kubectl -n "$NAMESPACE" label configmap "$cm" grafana_dashboard=1 --overwrite > /dev/null
+    echo "  로드: ${base}"
   done
 }
-load_dashboards "${DASHBOARD_DIR}/kubernetes"  "Kubernetes / Views"
-load_dashboards "${DASHBOARD_DIR}/application" "Application"
+load_dashboards "${DASHBOARD_DIR}/kubernetes"
+load_dashboards "${DASHBOARD_DIR}/application"
 
 echo ""
 echo "=== 5. 기동 대기 ==="
