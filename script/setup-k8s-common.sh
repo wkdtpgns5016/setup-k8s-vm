@@ -24,17 +24,19 @@ sudo sysctl --system > /dev/null
 
 echo "=== [3/5] 필수 패키지 및 containerd 설치 ==="
 sudo apt-get update -y
-# v1.31 필수 패키지 conntrack, socat 포함
+# v1.34 필수 패키지 conntrack, socat 포함
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg containerd conntrack socat
 
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+# k8s v1.34 kubeadm 기대값(pause:3.10)과 일치시켜 pause 컨테이너 GC 재시작 방지
+sudo sed -i 's|sandbox_image = ".*"|sandbox_image = "registry.k8s.io/pause:3.10"|' /etc/containerd/config.toml
 sudo systemctl restart containerd
 sudo systemctl enable containerd
 
-echo "=== [4/5] 쿠버네티스 패키지 저장소 등록 및 설치 (v1.31) ==="
-K8S_VERSION="v1.31"
+echo "=== [4/5] 쿠버네티스 패키지 저장소 등록 및 설치 (v1.34) ==="
+K8S_VERSION="v1.34"
 
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/${K8S_VERSION}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
@@ -61,5 +63,5 @@ sudo systemctl restart kubelet
 echo "Kubelet --node-ip 설정 완료 (${CURRENT_NODE_IP})"
 
 echo "=========================================================="
-echo ">>> 기본 환경 설정 완료! (Kubernetes v1.31)"
+echo ">>> 기본 환경 설정 완료! (Kubernetes v1.34)"
 echo "=========================================================="
