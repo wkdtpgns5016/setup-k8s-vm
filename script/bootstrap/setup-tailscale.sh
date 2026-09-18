@@ -72,12 +72,25 @@ if [ "$NODE_ROLE" -eq 1 ]; then
 else
   UP_ARGS=(--accept-dns=false --hostname="${HOSTNAME_TS}")
 fi
-if [ -n "$AUTHKEY" ]; then
-  echo ">>> tailscale up (auth key)..."
-  sudo tailscale up "${UP_ARGS[@]}" --authkey="${AUTHKEY}"
-else
-  echo ">>> tailscale up — 출력되는 URL 을 브라우저에서 열어 로그인하세요 (외부 기기와 같은 계정)."
-  sudo tailscale up "${UP_ARGS[@]}"
+tailscale_up() {
+  if [ -n "$AUTHKEY" ]; then
+    echo ">>> tailscale up (auth key)..."
+    sudo tailscale up "${UP_ARGS[@]}" --authkey="${AUTHKEY}"
+  else
+    echo ">>> tailscale up — 출력되는 URL 을 브라우저에서 열어 로그인하세요 (외부 기기와 같은 계정)."
+    sudo tailscale up "${UP_ARGS[@]}"
+  fi
+}
+tailscale_up
+
+# 5. 좌표 서버 연결 확인 — Tailscale 관리 콘솔에서 이 머신을 삭제한 뒤 재실행한 경우,
+#    로컬에 남은 예전 노드 키 때문에 "로그인됨"으로 오인해 위 tailscale up 이 로그인 URL 없이
+#    조용히 끝나지만 실제로는 offline 상태가 되는 경우가 있음 → 감지 시 재로그인으로 복구.
+if tailscale status 2>&1 | grep -q "Unable to connect to the Tailscale coordination server"; then
+  echo "[경고] 좌표 서버와 통신 불가 — 로컬에 남은 인증 정보가 무효화된 것으로 보입니다 (콘솔에서 삭제됨 등)."
+  echo ">>> 재로그인을 위해 로그아웃 후 다시 시도합니다..."
+  sudo tailscale logout
+  tailscale_up
 fi
 
 TS_IP=$(tailscale ip -4 2>/dev/null | head -n1 || true)
