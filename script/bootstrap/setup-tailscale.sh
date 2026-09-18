@@ -112,7 +112,11 @@ Requires=tailscaled.service
 
 [Service]
 Type=oneshot
-ExecStart=/sbin/ip route replace 100.64.0.0/10 dev tailscale0
+# After=/Requires= 는 tailscaled.service 가 "시작됨"만 보장할 뿐, tailscale0 인터페이스가
+# 실제로 UP 되는 시점까지는 보장하지 않음 → 최대 30초 폴링 후 라우트 적용.
+# ("ip link show tailscale0 up" 은 인터페이스가 아직 안 올라와도 필터에 안 걸려 빈 결과로 exit 0을
+#  반환하므로 UP 판정에 쓸 수 없음 → operstate 파일을 직접 확인)
+ExecStart=/bin/sh -c 'for i in $(seq 1 30); do [ "$(cat /sys/class/net/tailscale0/operstate 2>/dev/null)" = "up" ] && break; sleep 1; done; ip route replace 100.64.0.0/10 dev tailscale0'
 RemainAfterExit=yes
 
 [Install]
