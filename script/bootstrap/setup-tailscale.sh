@@ -67,10 +67,12 @@ if [ "$NODE_ROLE" -eq 1 ]; then
 fi
 
 # 4. tailscale up (Worker 는 서브넷 광고 없이 참여만 함)
+#    --reset : 이전 수동 설정(예: 예전에 다른 역할로 advertise-routes 를 걸어둔 경우) 이 남아있어도
+#              언급하지 않은 플래그는 기본값으로 초기화하고 아래 값만 그대로 적용
 if [ "$NODE_ROLE" -eq 1 ]; then
-  UP_ARGS=(--advertise-routes="${ADVERTISE_ROUTE}" --accept-dns=false --hostname="${HOSTNAME_TS}")
+  UP_ARGS=(--reset --advertise-routes="${ADVERTISE_ROUTE}" --accept-dns=false --hostname="${HOSTNAME_TS}")
 else
-  UP_ARGS=(--accept-dns=false --hostname="${HOSTNAME_TS}")
+  UP_ARGS=(--reset --accept-dns=false --hostname="${HOSTNAME_TS}")
 fi
 tailscale_up() {
   if [ -n "$AUTHKEY" ]; then
