@@ -95,6 +95,34 @@ if tailscale status 2>&1 | grep -q "Unable to connect to the Tailscale coordinat
   tailscale_up
 fi
 
+# 6. 워커 노드 한정: 파드가 포워딩하는 트래픽을 tailscale0 로 태우기 위한 라우트 유닛 설치
+#    Tailscale 은 전용 정책 라우팅 테이블을 쓰는데, 이는 "이 노드가 직접 만든" 패킷에만 적용됨.
+#    파드(Calico)가 만든 패킷은 노드 입장에서 포워딩 트래픽이라 메인 라우팅 테이블을 타게 되는데,
+#    거기엔 Tailscale CGNAT 대역(100.64.0.0/10) 라우트가 없어 그냥 기본 게이트웨이로 새어나가 버림
+#    (hostNetwork:true 파드는 노드가 직접 만든 패킷처럼 취급되어 정상 동작하므로 증상 구분 가능).
+#    tailscale0 는 tailscaled 가 매번 새로 만드는 인터페이스라 netplan 등 정적 설정으로 관리 불가
+#    → 부팅마다(및 지금 즉시) 적용되도록 systemd 유닛으로 설치.
+if [ "$NODE_ROLE" -eq 2 ]; then
+  echo ">>> 파드 포워딩 트래픽용 라우트 systemd 유닛 설치..."
+  sudo tee /etc/systemd/system/tailscale-pod-route.service > /dev/null <<'EOF'
+[Unit]
+Description=Route pod-forwarded traffic through tailscale0
+After=tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/ip route replace 100.64.0.0/10 dev tailscale0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now tailscale-pod-route.service
+  echo "[적용] 100.64.0.0/10 -> tailscale0 (메인 라우팅 테이블에 즉시 반영, 재부팅 후에도 유지)"
+fi
+
 TS_IP=$(tailscale ip -4 2>/dev/null | head -n1 || true)
 
 echo ""
@@ -115,7 +143,13 @@ if [ "$NODE_ROLE" -eq 1 ]; then
   echo "    kubectl get nodes"
 else
   echo ""
-  echo "  이 워커 노드에 ingress-nginx(hostNetwork) 가 떠 있다면,"
-  echo "  애드온 설치 시 위 Tailscale IP 를 입력하면 <서비스>.${TS_IP:-<Tailscale IP>}.nip.io 로 접속할 수 있습니다."
+  echo "  이 워커 노드에 ingress-nginx(hostNetwork) 와 ArgoCD/모니터링 등 애드온이 이미 설치되어 있다면,"
+  echo "  마스터 노드에서 아래 스크립트로 ingress 주소를 이 Tailscale IP 기준으로 즉시 갱신하세요:"
+  echo "    ~/setup-k8s-vm/script/addons/patch-tailscale-ip.sh ${TS_IP:-<Tailscale IP>}"
+  echo ""
+  echo "  아직 애드온을 설치하지 않았다면, 애드온 설치 스크립트 실행 중 위 Tailscale IP 를 입력하면 됩니다."
+  echo ""
+  echo "  파드 → Tailscale 라우트 확인:"
+  echo "    ip route show table main | grep 100.64   # 100.64.0.0/10 dev tailscale0 가 보이면 정상"
 fi
 echo "=================================================================="
