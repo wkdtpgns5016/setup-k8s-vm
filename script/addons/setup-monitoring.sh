@@ -14,6 +14,8 @@ RELEASE="kube-prometheus-stack"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DASHBOARD_DIR="${SCRIPT_DIR}/dashboards"
+# shellcheck source=./lib-ingress-ip.sh
+source "${SCRIPT_DIR}/lib-ingress-ip.sh"
 
 echo "=== 0. 사전 점검 ==="
 command -v helm &> /dev/null || { echo "에러: helm 이 없습니다. setup-k8s-master.sh 를 먼저 실행하세요."; exit 1; }
@@ -27,10 +29,9 @@ if helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
   exit 0
 fi
 
-echo "=== 1. Ingress 진입점(워커 노드) IP 탐지 ==="
-INGRESS_IP=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' \
-  -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' | awk '{print $1}')
-[ -n "$INGRESS_IP" ] || { echo "에러: 워커 노드를 찾을 수 없습니다."; exit 1; }
+echo "=== 1. Ingress 진입점 IP 결정 ==="
+resolve_ingress_ip || { echo "에러: 워커 노드를 찾을 수 없습니다."; exit 1; }
+INGRESS_IP="$RESOLVED_INGRESS_IP"
 
 GRAFANA_HOST="grafana.${INGRESS_IP}.nip.io"
 PROM_HOST="prometheus.${INGRESS_IP}.nip.io"
